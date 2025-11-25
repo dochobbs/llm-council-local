@@ -265,8 +265,8 @@ async def generate_conversation_title(user_query: str) -> str:
     Returns:
         A short title (3-5 words)
     """
-    title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
-The title should be concise and descriptive. Do not use quotes or punctuation in the title.
+    title_prompt = f"""Generate exactly ONE short title (3-5 words) for this question.
+Reply with ONLY the title, nothing else. No bullet points, no options, no explanation.
 
 Question: {user_query}
 
@@ -283,14 +283,22 @@ Title:"""
 
     title = response.get('content', 'New Conversation').strip()
 
-    # Clean up the title - remove quotes, limit length
-    title = title.strip('"\'')
+    # Clean up the title - remove quotes, asterisks, bullet points
+    title = title.strip('"\'*')
+
+    # If model returned multiple lines, take the first non-empty line
+    lines = [line.strip().strip('*-•').strip() for line in title.split('\n') if line.strip()]
+    if lines:
+        title = lines[0]
+
+    # Remove any leading bullet markers that might remain
+    title = title.lstrip('*-•123456789. ').strip()
 
     # Truncate if too long
     if len(title) > 50:
         title = title[:47] + "..."
 
-    return title
+    return title if title else "New Conversation"
 
 
 async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
