@@ -1,6 +1,7 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any, Tuple
+import asyncio
+from typing import List, Dict, Any, Tuple, AsyncGenerator
 from .ollama import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
@@ -30,6 +31,38 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
             })
 
     return stage1_results
+
+
+async def stage1_stream_responses(user_query: str) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    Stage 1 streaming: Yield individual responses as each model completes.
+
+    Args:
+        user_query: The user's question
+
+    Yields:
+        Dict with 'model' and 'response' keys for each completed model
+    """
+    from .config import COUNCIL_MODELS
+
+    messages = [{"role": "user", "content": user_query}]
+
+    # Create tasks for all models
+    async def query_and_tag(model: str):
+        response = await query_model(model, messages)
+        return model, response
+
+    # Create all tasks
+    tasks = [asyncio.create_task(query_and_tag(model)) for model in COUNCIL_MODELS]
+
+    # Yield results as they complete
+    for completed in asyncio.as_completed(tasks):
+        model, response = await completed
+        if response is not None:
+            yield {
+                "model": model,
+                "response": response.get('content', '')
+            }
 
 
 async def stage2_collect_rankings(

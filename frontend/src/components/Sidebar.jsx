@@ -8,6 +8,7 @@ export default function Sidebar({
   onNewConversation,
   darkMode,
   onToggleDarkMode,
+  onOpenSettings,
 }) {
   return (
     <div className="sidebar">
@@ -41,8 +42,11 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="theme-toggle">
-        <button className="theme-toggle-btn" onClick={onToggleDarkMode}>
+      <div className="sidebar-footer">
+        <button className="sidebar-btn" onClick={onOpenSettings}>
+          ⚙️ Settings
+        </button>
+        <button className="sidebar-btn" onClick={onToggleDarkMode}>
           {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
         </button>
       </div>

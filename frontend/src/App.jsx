@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import HealthStatus from './components/HealthStatus';
+import Settings from './components/Settings';
 import { api } from './api';
 import './App.css';
 
@@ -14,6 +16,7 @@ function App() {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Apply theme to document
   useEffect(() => {
@@ -59,7 +62,7 @@ function App() {
     try {
       const newConv = await api.createConversation();
       setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
+        { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
         ...conversations,
       ]);
       setCurrentConversationId(newConv.id);
@@ -84,6 +87,13 @@ function App() {
         messages: [...prev.messages, userMessage],
       }));
 
+      // Track timing for each stage
+      const stageTiming = {
+        stage1Start: null,
+        stage2Start: null,
+        stage3Start: null,
+      };
+
       // Create a partial assistant message that will be updated progressively
       const assistantMessage = {
         role: 'assistant',
@@ -91,6 +101,11 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        timing: {
+          stage1: null,
+          stage2: null,
+          stage3: null,
+        },
         loading: {
           stage1: false,
           stage2: false,
@@ -108,10 +123,26 @@ function App() {
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
+            stageTiming.stage1Start = Date.now();
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.stage1 = true;
+              lastMsg.stage1 = []; // Initialize as empty array for progressive updates
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'stage1_model_complete':
+            // Individual model completed - add to stage1 array (avoid duplicates)
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              const existingModels = (lastMsg.stage1 || []).map(r => r.model);
+              // Only add if this model isn't already in the list
+              if (!existingModels.includes(event.data.model)) {
+                lastMsg.stage1 = [...(lastMsg.stage1 || []), event.data];
+              }
               return { ...prev, messages };
             });
             break;
@@ -122,11 +153,15 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage1 = event.data;
               lastMsg.loading.stage1 = false;
+              lastMsg.timing.stage1 = stageTiming.stage1Start
+                ? Math.round((Date.now() - stageTiming.stage1Start) / 1000)
+                : null;
               return { ...prev, messages };
             });
             break;
 
           case 'stage2_start':
+            stageTiming.stage2Start = Date.now();
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
@@ -142,11 +177,15 @@ function App() {
               lastMsg.stage2 = event.data;
               lastMsg.metadata = event.metadata;
               lastMsg.loading.stage2 = false;
+              lastMsg.timing.stage2 = stageTiming.stage2Start
+                ? Math.round((Date.now() - stageTiming.stage2Start) / 1000)
+                : null;
               return { ...prev, messages };
             });
             break;
 
           case 'stage3_start':
+            stageTiming.stage3Start = Date.now();
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
@@ -161,6 +200,9 @@ function App() {
               const lastMsg = messages[messages.length - 1];
               lastMsg.stage3 = event.data;
               lastMsg.loading.stage3 = false;
+              lastMsg.timing.stage3 = stageTiming.stage3Start
+                ? Math.round((Date.now() - stageTiming.stage3Start) / 1000)
+                : null;
               return { ...prev, messages };
             });
             break;
@@ -205,12 +247,17 @@ function App() {
         onNewConversation={handleNewConversation}
         darkMode={darkMode}
         onToggleDarkMode={handleToggleDarkMode}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
-      <ChatInterface
-        conversation={currentConversation}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-      />
+      <div className="main-content">
+        <HealthStatus />
+        <ChatInterface
+          conversation={currentConversation}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+        />
+      </div>
+      <Settings isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

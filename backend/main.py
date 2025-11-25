@@ -10,7 +10,9 @@ import json
 import asyncio
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage1_stream_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .ollama import check_ollama_available, list_available_models
+from . import config
 
 app = FastAPI(title="LLM Council Local API")
 
@@ -34,6 +36,12 @@ class SendMessageRequest(BaseModel):
     content: str
 
 
+class UpdateConfigRequest(BaseModel):
+    """Request to update model configuration."""
+    council_models: List[str]
+    chairman_model: str
+
+
 class ConversationMetadata(BaseModel):
     """Conversation metadata for list view."""
     id: str
@@ -54,6 +62,69 @@ class Conversation(BaseModel):
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council Local API"}
+
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Comprehensive health check including Ollama status and model availability.
+    """
+    ollama_available = await check_ollama_available()
+    available_models = await list_available_models() if ollama_available else []
+
+    # Check which configured models are available
+    council_status = []
+    for model in config.COUNCIL_MODELS:
+        # Check if model (or model without tag) is in available models
+        is_available = any(
+            model == avail or model.split(':')[0] == avail.split(':')[0]
+            for avail in available_models
+        )
+        council_status.append({
+            "model": model,
+            "available": is_available
+        })
+
+    # Check chairman model
+    chairman_available = any(
+        config.CHAIRMAN_MODEL == avail or config.CHAIRMAN_MODEL.split(':')[0] == avail.split(':')[0]
+        for avail in available_models
+    )
+
+    all_models_ready = all(m["available"] for m in council_status) and chairman_available
+
+    return {
+        "ollama_available": ollama_available,
+        "available_models": available_models,
+        "council_models": council_status,
+        "chairman_model": {
+            "model": config.CHAIRMAN_MODEL,
+            "available": chairman_available
+        },
+        "ready": ollama_available and all_models_ready
+    }
+
+
+@app.get("/api/config")
+async def get_config():
+    """Get current model configuration."""
+    available_models = await list_available_models()
+    return {
+        "council_models": config.COUNCIL_MODELS,
+        "chairman_model": config.CHAIRMAN_MODEL,
+        "available_models": available_models
+    }
+
+
+@app.post("/api/config")
+async def update_config(request: UpdateConfigRequest):
+    """Update model configuration (in memory only - resets on restart)."""
+    config.COUNCIL_MODELS = request.council_models
+    config.CHAIRMAN_MODEL = request.chairman_model
+    return {
+        "council_models": config.COUNCIL_MODELS,
+        "chairman_model": config.CHAIRMAN_MODEL
+    }
 
 
 @app.get("/api/conversations", response_model=List[ConversationMetadata])
@@ -147,9 +218,12 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
             if is_first_message:
                 title_task = asyncio.create_task(generate_conversation_title(request.content))
 
-            # Stage 1: Collect responses
+            # Stage 1: Stream individual model responses
             yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results = await stage1_collect_responses(request.content)
+            stage1_results = []
+            async for result in stage1_stream_responses(request.content):
+                stage1_results.append(result)
+                yield f"data: {json.dumps({'type': 'stage1_model_complete', 'data': result})}\n\n"
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
 
             # Stage 2: Collect rankings

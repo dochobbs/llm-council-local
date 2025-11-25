@@ -6,11 +6,21 @@ A fork of [LLM Council](https://github.com/karpathy/llm-council) that runs entir
 
 Instead of asking a question to a single LLM, you can group multiple local models into your "LLM Council". This web app sends your query to multiple local LLMs, has them review and rank each other's work anonymously, and then a Chairman LLM produces the final synthesized response.
 
+## Features
+
+- **Fully Local**: Runs entirely on your machine using Ollama
+- **Progressive Streaming**: See model responses as they complete, not all at once
+- **Dark Mode**: Toggle between light and dark themes
+- **Configurable Models**: Change council members and chairman via Settings UI
+- **Health Monitoring**: Startup checks warn you if Ollama or models are unavailable
+- **Timing Display**: See how long each stage takes
+- **Conversation History**: Automatically saves and loads past conversations
+
 ## How It Works
 
-1. **Stage 1: First opinions**. The user query is given to all LLMs individually, and the responses are collected. The individual responses are shown in a "tab view", so that the user can inspect them all one by one.
-2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
-3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
+1. **Stage 1: First opinions**. The user query is given to all LLMs individually. Responses stream in progressively as each model completes - you can read the first response while others are still generating.
+2. **Stage 2: Review**. Each individual LLM evaluates the responses of the other LLMs. Identities are anonymized (Response A, B, C) so models can't play favorites.
+3. **Stage 3: Final response**. The designated Chairman synthesizes all responses and rankings into a single final answer.
 
 ## Prerequisites
 
@@ -47,9 +57,18 @@ npm install
 cd ..
 ```
 
-### 2. Configure Models (Optional)
+### 2. Configure Models
 
-Edit `backend/config.py` to customize the council:
+You can configure models two ways:
+
+**Option A: Via Settings UI** (changes reset on restart)
+- Click the ⚙️ Settings button in the sidebar
+- Select council members from your available Ollama models
+- Choose a chairman model
+
+**Option B: Edit config file** (permanent)
+
+Edit `backend/config.py`:
 
 ```python
 COUNCIL_MODELS = [
@@ -60,8 +79,6 @@ COUNCIL_MODELS = [
 
 CHAIRMAN_MODEL = "llama3.2"
 ```
-
-Use any models you have pulled with `ollama pull`.
 
 ## Running the Application
 
@@ -87,9 +104,10 @@ Then open http://localhost:5173 in your browser.
 
 ## Performance Notes
 
-- **Speed**: Local inference is slower than cloud APIs. Expect 30-60 seconds per stage depending on your hardware and model size.
+- **Speed**: Local inference is slower than cloud APIs. Expect 30-60 seconds per stage depending on your hardware and model size. The progressive streaming helps - you can start reading the first response while others generate.
 - **Memory**: Ollama swaps models in and out of memory as needed. More RAM = faster model switching.
 - **Quality**: 7B-13B parameter local models won't match GPT-4/Claude quality, but they're free and private.
+- **Timing**: Each stage shows elapsed time after completion so you can gauge what's normal for your setup.
 
 ## Tech Stack
 
