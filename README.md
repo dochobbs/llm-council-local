@@ -8,12 +8,12 @@ Instead of asking a question to a single LLM, you can group multiple local model
 
 ## Features
 
-- **Fully Local**: Runs entirely on your machine using Ollama
+- **Fully Local**: Runs entirely on your machine using Ollama - no data leaves your computer
 - **Progressive Streaming**: See model responses as they complete, not all at once
 - **Dark Mode**: Toggle between light and dark themes
-- **Configurable Models**: Change council members and chairman via Settings UI
+- **Configurable Models**: Change council members and chairman via Settings UI or config file
 - **Health Monitoring**: Startup checks warn you if Ollama or models are unavailable
-- **Timing Display**: See how long each stage takes
+- **Timing Display**: See how long each stage takes after completion
 - **Conversation History**: Automatically saves and loads past conversations
 
 ## How It Works
@@ -102,6 +102,18 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Check Ollama status and model availability |
+| `/api/config` | GET | Get current model configuration |
+| `/api/config` | POST | Update council/chairman models (runtime only) |
+| `/api/conversations` | GET | List all conversations |
+| `/api/conversations` | POST | Create a new conversation |
+| `/api/conversations/{id}` | GET | Get conversation details |
+| `/api/conversations/{id}/message/stream` | POST | Send message with SSE streaming |
+
 ## Performance Notes
 
 - **Speed**: Local inference is slower than cloud APIs. Expect 30-60 seconds per stage depending on your hardware and model size. The progressive streaming helps - you can start reading the first response while others generate.
@@ -115,6 +127,15 @@ Then open http://localhost:5173 in your browser.
 - **Frontend:** React + Vite, react-markdown for rendering
 - **Storage:** JSON files in `data/conversations/`
 - **Package Management:** uv for Python, npm for JavaScript
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "Cannot connect to Ollama" | Run `ollama serve` in a separate terminal |
+| Model not found | Run `ollama pull <model-name>` first |
+| Slow responses | Normal for local inference - try smaller models |
+| Health check shows models unavailable | Verify model names match what's in `ollama list` |
 
 ## Credits
 
